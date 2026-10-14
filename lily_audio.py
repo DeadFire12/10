@@ -472,11 +472,30 @@ class LocalAudioBridge:
                 detector = self._wake_detector
                 if detector is not None:
                     samples = np.frombuffer(data, dtype=np.int16)
-
-                    # Convert interleaved stereo audio to mono.
                     samples = samples[:(samples.size // 2) * 2]
-                    samples = samples.reshape(-1, 2).astype(np.int32)
-                    samples = np.mean(samples, axis=1).astype(np.int16)
+                    stereo = samples.reshape(-1, 2)
+
+                    left = stereo[:, 0].astype(np.float32)
+                    right = stereo[:, 1].astype(np.float32)
+
+                    left_rms = float(np.sqrt(np.mean(left * left)))
+                    right_rms = float(np.sqrt(np.mean(right * right)))
+
+                    # Use the channel carrying the stronger signal.
+                    if left_rms >= right_rms:
+                        samples = stereo[:, 0].copy()
+                        selected = "left"
+                    else:
+                        samples = stereo[:, 1].copy()
+                        selected = "right"
+
+                    if chunk_count % 25 == 0:
+                        _log(
+                            self._log,
+                            "SYS: Wake channels: left RMS=%.1f, "
+                            "right RMS=%.1f, selected=%s"
+                            % (left_rms, right_rms, selected)
+                        )
 
                     samples_16k = resample_poly(samples, 160, 441)
 
